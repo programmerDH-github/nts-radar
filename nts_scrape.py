@@ -1,13 +1,16 @@
+import re
 from datetime import datetime
-import requests
 
+import requests
+from bs4 import BeautifulSoup
+
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"}
+
+# ---------- 국세청 ----------
 BASE = "https://www.nts.go.kr"
 
-# 탭 이름 -> 사이트 내부 bbsId ("전체"는 아래 fetch_all에서 직접 합쳐서 만듦)
-TABS = {"전체": None, "보도·설명 자료": "B", "공지사항": "1011", "고시": "1120", "공고": "1122"}
-
-# "전체" 탭에서 뺄 탭
-EXCLUDE_FROM_ALL = {"공고"}
+# 국세청 탭 이름 -> 사이트 내부 bbsId
+NTS_TABS = {"보도·설명 자료": "B", "공지사항": "1011", "고시": "1120", "공고": "1122"}
 
 # 게시판별 (구분 표시, 링크용 mi 값)
 BOARDS = {
@@ -20,8 +23,7 @@ BOARDS = {
 
 
 def fetch_tab(bbs_id):
-    res = requests.post(f"{BASE}/nts/bbsId.do", data={"bbsId": bbs_id},
-                        headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+    res = requests.post(f"{BASE}/nts/bbsId.do", data={"bbsId": bbs_id}, headers=HEADERS, timeout=10)
     res.raise_for_status()
     items = []
     for x in res.json()["nttList"]:
@@ -36,14 +38,69 @@ def fetch_tab(bbs_id):
     return items
 
 
-def fetch_all():
-    """탭별 목록을 가져오고, '전체'는 공고를 뺀 나머지 탭을 합쳐 최신순으로 만든다."""
-    data = {tab: fetch_tab(bbs_id) for tab, bbs_id in TABS.items() if bbs_id}
+# ---------- 재정경제부 세제실 ----------
+MOFE = "https://mofe.go.kr"
+MOFE_PRESS = "MOSFBBS_000000000028"   # 보도자료 게시판
+MOFE_TAX_DEPT = "1051010"             # 세제실
+
+
+def fetch_mofe_tax():
+    """재정경제부 보도자료 중 세제실(조세정책과, 소득세제과 등) 글만 가져온다."""
+    res = requests.get(f"{MOFE}/nw/nes/nesdta.do", headers=HEADERS, timeout=15, params={
+        "searchBbsId1": MOFE_PRESS, "menuNo": "4010100", "searchSilDeptId1": MOFE_TAX_DEPT,
+    })
+    res.raise_for_status()
+    soup = BeautifulSoup(res.content.decode("utf-8"), "html.parser")
+    items = []
+    for li in soup.select("li"):
+        a = li.select_one("h3 a[href*=fn_egov_select]")
+        if not a:
+            continue
+        ntt_id = re.search(r"'(\w+)'", a["href"]).group(1)
+        dept = li.select_one(".depart")
+        items.append({
+            "id": ntt_id,
+            "구분": "세제",
+            "제목": a.get_text(strip=True) + (f" ({dept.get_text(strip=True)})" if dept else ""),
+            "날짜": datetime.strptime(li.select_one(".date").get_text(strip=True), "%Y.%m.%d.").strftime("%y.%m.%d."),
+            "링크": f"{MOFE}/nw/nes/detailNesDtaView.do?searchBbsId1={MOFE_PRESS}&searchNttId1={ntt_id}&menuNo=4010100",
+        })
+    return items
+
+
+# ---------- 탭 구성 ----------
+# 탭 이름 -> 가져오는 함수 ("전체"는 fetch_all에서 직접 합쳐서 만듦)
+SOURCES = {name: (lambda b=bbs_id: fetch_tab(b)) for name, bbs_id in NTS_TABS.items()}
+SOURCES["세제실"] = fetch_mofe_tax
+
+TABS = ["전체", *SOURCES]
+
+# "전체" 탭에서 뺄 탭
+EXCLUDE_FROM_ALL = {"공고"}
+
+
+def merge_all(data):
+    """제외 탭을 뺀 나머지 탭을 합쳐 '전체' 목록을 만든다."""
     merged = {}
     for tab, items in data.items():
-        if tab not in EXCLUDE_FROM_ALL:
+        if tab != "전체" and tab not in EXCLUDE_FROM_ALL:
             for it in items:
                 merged[it["id"]] = it
     # 날짜(yy.mm.dd.) 최신순, 같은 날짜면 글 번호가 큰(나중에 올린) 순
-    data["전체"] = sorted(merged.values(), key=lambda it: (it["날짜"], int(it["id"])), reverse=True)
-    return data
+    return sorted(merged.values(), key=lambda it: (it["날짜"], int(re.sub(r"\D", "", it["id"]))), reverse=True)
+
+
+def fetch_all(fallback=None):
+    """모든 탭을 가져온다. 실패한 탭은 fallback(이전 데이터)이 있으면 그걸 쓰고, 없으면 빈 목록.
+    반환: (탭별 데이터, {실패한 탭: 오류})"""
+    data, errors = {}, {}
+    for tab, fetch in SOURCES.items():
+        try:
+            data[tab] = fetch()
+        except Exception as e:
+            errors[tab] = e
+            data[tab] = (fallback or {}).get(tab, [])
+    if len(errors) == len(SOURCES):
+        raise next(iter(errors.values()))
+    data["전체"] = merge_all(data)
+    return {tab: data[tab] for tab in TABS}, errors

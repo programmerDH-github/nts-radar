@@ -33,7 +33,7 @@ LINE = "#e6e9ef"
 TEXT = "#1f2937"
 TEXT_READ = "#8a93a3"
 SUB = "#9aa4b5"
-BADGE = {"보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669"}
+BADGE = {"보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669", "세제": "#b45309"}
 
 FONT = "맑은 고딕"
 
@@ -52,6 +52,7 @@ class RadarApp:
         self.data = {tab: [] for tab in TABS}
         self.current = "전체"
         self.loading = False
+        self.failed = []
 
         root.title("국세레이더 - 국세청 새 소식")
         root.geometry("960x620")
@@ -140,7 +141,9 @@ class RadarApp:
 
     def _fetch_all(self):
         try:
-            data = fetch_all()
+            # 일부 사이트가 안 열리면 그 탭은 직전 목록을 유지
+            data, errors = fetch_all(fallback=self.data)
+            self.failed = list(errors)
             self.root.after(0, self._on_loaded, data, None)
         except Exception as e:
             self.root.after(0, self._on_loaded, None, e)
@@ -182,7 +185,10 @@ class RadarApp:
         unread_all = {it["id"] for items in self.data.values() for it in items if self.is_unread(it)}
         if hasattr(self, "updated"):
             msg = f"새 글 {len(unread_all)}개" if unread_all else "새 글 없음"
-            self.status.configure(text=f"{msg}  ·  {self.updated} 업데이트", fg=GREEN if unread_all else SUB)
+            text = f"{msg}  ·  {self.updated} 업데이트"
+            if self.failed:
+                text += f"  ·  {', '.join(self.failed)} 연결 실패"
+            self.status.configure(text=text, fg=GREEN if unread_all else SUB)
 
         for tab, (label, count, underline) in self.tab_widgets.items():
             active = tab == self.current
