@@ -1,0 +1,6 @@
+# PC 앱 빌드 결과물과 개인 읽음 기록은 올리지 않음
+dist/
+build/
+*.spec
+__pycache__/
+nts_read.json
