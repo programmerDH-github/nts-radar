@@ -1,6 +1,5 @@
 """국세청·재정경제부 목록을 가져와 웹앱용 docs/data.json 으로 저장한다. (GitHub Actions에서 주기적으로 실행)"""
 import json
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -19,7 +18,10 @@ def main():
     for tab, e in errors.items():
         print(f"[경고] {tab} 가져오기 실패 → 이전 목록 유지: {type(e).__name__}: {e}")
     if len(errors) == len(data) - 1:  # '전체'를 뺀 모든 탭 실패
-        sys.exit("모든 사이트 접속 실패")
+        # GitHub 서버 IP에 따라 한국 정부 사이트 접속이 막히는 경우가 있음.
+        # 이전 목록은 그대로 두고 다음 실행을 기다림 (실패 알림 메일이 오지 않도록 경고만 남김)
+        print("::warning::모든 사이트 접속 실패 - 이번 실행은 건너뜀")
+        return
 
     payload = {
         "updated": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),

@@ -2,7 +2,7 @@ name: 국세청 목록 갱신
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # 30분마다 (GitHub 사정에 따라 몇 분씩 늦어질 수 있음)
+    - cron: "*/20 * * * *"   # 20분마다 (GitHub 사정에 따라 몇 분씩 늦어질 수 있음)
   workflow_dispatch:          # Actions 화면에서 수동 실행 가능
 
 permissions:
