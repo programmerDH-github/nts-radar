@@ -78,15 +78,70 @@ def fetch_mofe_tax():
     return items
 
 
+# ---------- 국세법령정보시스템 ----------
+TAXLAW = "https://taxlaw.nts.go.kr"
+
+
+def _taxlaw_doc(it, kind, path):
+    """해석례·심판례·판례 한 건을 공통 형식으로 변환"""
+    tax = it.get("ntstTlawClCdAbrvNm") or ""
+    title = re.sub(r"\s+", " ", it["ntstDcmTtl"]).strip()
+    if len(title) > 120:
+        title = title[:120] + "…"
+    extra = [it["ntstDcmIdNm"]]
+    if it.get("subIconNm") and it["subIconNm"] != "해당없음":
+        extra.append(it["subIconNm"])   # 인용/기각/국승/국패 등 결과
+    return {
+        "id": it["ntstDcmId"],
+        "구분": kind,
+        "제목": f"[{tax}] {title} ({', '.join(extra)})" if tax else f"{title} ({', '.join(extra)})",
+        "날짜": datetime.strptime(it["frsRgtDtm"][:8], "%Y%m%d").strftime("%y.%m.%d."),
+        "링크": f"{TAXLAW}{path}?ntstDcmId={it['ntstDcmId']}",
+    }
+
+
+def fetch_taxlaw():
+    """국세법령정보시스템 메인의 최신 목록(해석례·심판례·판례·개정법령)을 한 번에 가져온다."""
+    res = session.post(f"{TAXLAW}/action.do", timeout=TIMEOUT,
+                       data={"actionId": "ASECMD001MR01", "paramData": "{}"})
+    res.raise_for_status()
+    body = res.json()
+    if body.get("status") != "SUCCESS":
+        raise RuntimeError(f"국세법령정보시스템 응답 오류: {body.get('status')}")
+    d = body["data"]["ASECMD001MR01"]
+    return {
+        "해석례": [_taxlaw_doc(it, "해석", "/qt/USEQTA002P.do") for it in d["ltstTrpThanList"]],
+        "심판례": [_taxlaw_doc(it, "심판", "/pd/USEPDA002P.do") for it in d["ltstCntdList"]],
+        "판례": [_taxlaw_doc(it, "판례", "/pd/USEPDA002P.do") for it in d["ltstPrtsList"]],
+        "개정법령": [{
+            "id": "LAW" + it["lnkBrkdId"],
+            "구분": "법령",
+            "제목": f"{it['stttTtl']} ({it['pmgCntn']})",
+            "날짜": datetime.strptime(it["pmgDt"], "%Y%m%d").strftime("%y.%m.%d."),
+            "링크": f"{TAXLAW}/st/USESTA003P.do?ntstBscId={it['lnkBscId']}&ntstBrkdId={it['lnkBrkdId']}",
+        } for it in d["mainLtstStttList"]],
+    }
+
+
 # ---------- 탭 구성 ----------
-# 탭 이름 -> 가져오는 함수 ("전체"는 fetch_all에서 직접 합쳐서 만듦)
-SOURCES = {name: (lambda b=bbs_id: fetch_tab(b)) for name, bbs_id in NTS_TABS.items()}
-SOURCES["세제실"] = fetch_mofe_tax
+# (이 함수가 채우는 탭들, 가져오는 함수) — 함수는 {탭 이름: 목록} 을 돌려줌
+# "전체"는 fetch_all에서 직접 합쳐서 만듦
+SOURCES = [
+    *[([name], lambda n=name, b=bbs_id: {n: fetch_tab(b)}) for name, bbs_id in NTS_TABS.items()],
+    (["세제실"], lambda: {"세제실": fetch_mofe_tax()}),
+    (["해석례", "심판례", "판례", "개정법령"], fetch_taxlaw),
+]
 
-TABS = ["전체", *SOURCES]
+TABS = ["전체", *(tab for tabs, _ in SOURCES for tab in tabs)]
 
-# "전체" 탭에서 뺄 탭
-EXCLUDE_FROM_ALL = {"공고"}
+# 화면에서 탭을 묶어 보여줄 단위
+GROUPS = {
+    "소식": ["전체", *NTS_TABS, "세제실"],
+    "법령정보": ["해석례", "심판례", "판례", "개정법령"],
+}
+
+# "전체" 탭에서 뺄 탭 (국세법령정보시스템 자료는 참고 자료라 따로 봄)
+EXCLUDE_FROM_ALL = {"공고", "해석례", "심판례", "판례", "개정법령"}
 
 
 def merge_all(data):
@@ -104,11 +159,12 @@ def fetch_all(fallback=None):
     """모든 탭을 가져온다. 실패한 탭은 fallback(이전 데이터)이 있으면 그걸 쓰고, 없으면 빈 목록.
     반환: (탭별 데이터, {실패한 탭: 오류})"""
     data, errors = {}, {}
-    for tab, fetch in SOURCES.items():
+    for tabs, fetch in SOURCES:
         try:
-            data[tab] = fetch()
+            data.update(fetch())
         except Exception as e:
-            errors[tab] = e
-            data[tab] = (fallback or {}).get(tab, [])
+            for tab in tabs:
+                errors[tab] = e
+                data[tab] = (fallback or {}).get(tab, [])
     data["전체"] = merge_all(data)
     return {tab: data[tab] for tab in TABS}, errors

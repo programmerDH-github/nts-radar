@@ -7,7 +7,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from nts_scrape import TABS, fetch_all
+from nts_scrape import GROUPS, TABS, fetch_all
 
 # exe로 실행 시: 아이콘은 exe 내부 임시폴더, 읽은 기록은 exe 옆에 저장
 if getattr(sys, "frozen", False):
@@ -33,7 +33,7 @@ LINE = "#e6e9ef"
 TEXT = "#1f2937"
 TEXT_READ = "#8a93a3"
 SUB = "#9aa4b5"
-BADGE = {"보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669", "세제": "#b45309"}
+BADGE = {"보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669", "세제": "#b45309", "해석": "#0d9488", "심판": "#be185d", "판례": "#4f46e5", "법령": "#475569"}
 
 FONT = "맑은 고딕"
 
@@ -50,7 +50,9 @@ class RadarApp:
         self.root = root
         self.read_ids = load_read()
         self.data = {tab: [] for tab in TABS}
-        self.current = "전체"
+        self.group = next(iter(GROUPS))
+        self.last_tab = {g: tabs[0] for g, tabs in GROUPS.items()}  # 묶음별 마지막으로 본 탭
+        self.current = self.last_tab[self.group]
         self.loading = False
         self.failed = []
 
@@ -86,12 +88,29 @@ class RadarApp:
         self.read_all_btn.pack(side="right", padx=(0, 8))
 
     def _build_tabs(self):
-        bar = tk.Frame(self.root, bg=NAVY, padx=14)
+        bar = tk.Frame(self.root, bg=NAVY, padx=18)
         bar.pack(fill="x")
+
+        # 묶음 전환 버튼 (소식 / 법령정보)
+        seg = tk.Frame(bar, bg=NAVY_LIGHT, padx=3, pady=3)
+        seg.pack(side="left", pady=(4, 7))
+        self.group_widgets = {}
+        for g in GROUPS:
+            pill = tk.Frame(seg, bg=NAVY_LIGHT, cursor="hand2")
+            pill.pack(side="left")
+            name = tk.Label(pill, text=g, font=(FONT, 9, "bold"), padx=12, pady=3, bg=NAVY_LIGHT, fg=SUB)
+            name.pack(side="left")
+            dot = tk.Label(pill, text="●", font=(FONT, 7), bg=NAVY_LIGHT, fg=GREEN)
+            for w in (pill, name, dot):
+                w.bind("<Button-1>", lambda e, g=g: self.select_group(g))
+            self.group_widgets[g] = (pill, name, dot)
+        tk.Frame(bar, bg=NAVY_LIGHT, width=1, height=22).pack(side="left", padx=(14, 4), pady=(0, 3))
+
+        self.tabs_frame = tk.Frame(bar, bg=NAVY)
+        self.tabs_frame.pack(side="left")
         self.tab_widgets = {}
         for tab in TABS:
-            box = tk.Frame(bar, bg=NAVY, cursor="hand2")
-            box.pack(side="left")
+            box = tk.Frame(self.tabs_frame, bg=NAVY, cursor="hand2")
             inner = tk.Frame(box, bg=NAVY, padx=10, pady=8)
             inner.pack()
             label = tk.Label(inner, text=tab, font=(FONT, 10), fg=SUB, bg=NAVY)
@@ -101,7 +120,7 @@ class RadarApp:
             underline.pack(fill="x")
             for w in (box, inner, label, count):
                 w.bind("<Button-1>", lambda e, t=tab: self.select_tab(t))
-            self.tab_widgets[tab] = (label, count, underline)
+            self.tab_widgets[tab] = (box, label, count, underline)
 
     def _build_list(self):
         wrap = tk.Frame(self.root, bg=BG, padx=20, pady=16)
@@ -179,7 +198,12 @@ class RadarApp:
         self.render()
 
     def select_tab(self, tab):
-        self.current = tab
+        self.current = self.last_tab[self.group] = tab
+        self.render()
+
+    def select_group(self, group):
+        self.group = group
+        self.current = self.last_tab[group]
         self.render()
 
     # ---------- 그리기 ----------
@@ -192,7 +216,23 @@ class RadarApp:
                 text += f"  ·  {', '.join(self.failed)} 연결 실패"
             self.status.configure(text=text, fg=GREEN if unread_all else SUB)
 
-        for tab, (label, count, underline) in self.tab_widgets.items():
+        for g, (pill, name, dot) in self.group_widgets.items():
+            active = g == self.group
+            bg = GREEN if active else NAVY_LIGHT
+            pill.configure(bg=bg)
+            name.configure(bg=bg, fg=NAVY if active else SUB)
+            # 보고 있지 않은 묶음에 안 읽은 글이 있으면 초록 점
+            if not active and any(self.is_unread(it) for tab in GROUPS[g] for it in self.data[tab]):
+                dot.pack(side="left", padx=(0, 8))
+            else:
+                dot.pack_forget()
+
+        for box, *_ in self.tab_widgets.values():
+            box.pack_forget()
+        for tab in GROUPS[self.group]:
+            self.tab_widgets[tab][0].pack(side="left")
+
+        for tab, (box, label, count, underline) in self.tab_widgets.items():
             active = tab == self.current
             label.configure(fg="white" if active else SUB, font=(FONT, 10, "bold" if active else "normal"))
             underline.configure(bg=GREEN if active else NAVY)

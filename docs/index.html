@@ -62,6 +62,10 @@
 
   nav { display: flex; gap: 2px; max-width: 980px; margin: 10px auto 0; overflow-x: auto; scrollbar-width: none; }
   nav::-webkit-scrollbar { display: none; }
+  .seg { display: flex; flex: none; align-self: center; background: var(--navy-light); border-radius: 8px; padding: 3px; margin-right: 10px; }
+  .seg button { background: none; color: var(--sub); font-size: 13.5px; font-weight: 700; padding: 5px 12px; border-radius: 6px; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .seg button.active { background: var(--green); color: var(--navy); }
+  .seg .gdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
   .tab { background: none; color: var(--sub); padding: 10px 12px 11px; font-size: 15px; white-space: nowrap;
     border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; }
   .tab.active { color: #fff; font-weight: 700; border-bottom-color: var(--green); }
@@ -112,12 +116,13 @@
 </main>
 
 <script>
-const BADGE = { "보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669", "세제": "#b45309" };
+const BADGE = { "보도": "#2563eb", "설명": "#0891b2", "공지": "#7c3aed", "고시": "#ea580c", "공고": "#059669", "세제": "#b45309", "해석": "#0d9488", "심판": "#be185d", "판례": "#4f46e5", "법령": "#475569" };
 const READ_KEY = "nts-radar-read";
 const TAB_KEY = "nts-radar-tab";
 
 let data = null;
 let current = load(TAB_KEY, "전체");
+let group = null;
 let readIds = new Set(load(READ_KEY, []));
 
 function load(key, fallback) {
@@ -157,7 +162,13 @@ function render() {
   status.className = unreadAll.size ? "new" : "";
   status.textContent = `${unreadAll.size ? `새 글 ${unreadAll.size}개` : "새 글 없음"} · ${data.updated.slice(5).replace("-", ".")} 갱신`;
 
-  document.getElementById("tabs").innerHTML = data.tabs.map(t => {
+  const groups = data.groups || [{ name: "전체", tabs: data.tabs.map(t => t.name) }];
+  group = groups.find(g => g.tabs.includes(current)) || groups[0];
+  const segHtml = groups.length > 1 ? `<div class="seg">${groups.map(g => {
+    const hasNew = g !== group && data.tabs.some(t => g.tabs.includes(t.name) && t.items.some(isUnread));
+    return `<button class="${g === group ? "active" : ""}" data-group="${esc(g.name)}">${esc(g.name)}${hasNew ? '<span class="gdot"></span>' : ""}</button>`;
+  }).join("")}</div>` : "";
+  document.getElementById("tabs").innerHTML = segHtml + data.tabs.filter(t => group.tabs.includes(t.name)).map(t => {
     const n = t.items.filter(isUnread).length;
     return `<button class="tab${t.name === current ? " active" : ""}" data-tab="${esc(t.name)}">
       ${esc(t.name)}${n ? `<span class="count">${n}</span>` : ""}</button>`;
@@ -173,7 +184,20 @@ function render() {
     </a>`).join("") : `<div class="empty">표시할 글이 없습니다</div>`;
 }
 
+const lastTab = load("nts-radar-lasttab", {});
 document.getElementById("tabs").addEventListener("click", e => {
+  const g = e.target.closest("[data-group]");
+  if (g) {
+    const target = (data.groups || []).find(x => x.name === g.dataset.group);
+    if (!target) return;
+    lastTab[group.name] = current;
+    save("nts-radar-lasttab", lastTab);
+    current = target.tabs.includes(lastTab[target.name]) ? lastTab[target.name] : target.tabs[0];
+    save(TAB_KEY, current);
+    render();
+    window.scrollTo({ top: 0 });
+    return;
+  }
   const tab = e.target.closest(".tab");
   if (!tab) return;
   current = tab.dataset.tab;

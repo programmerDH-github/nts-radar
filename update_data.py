@@ -4,7 +4,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from nts_scrape import TABS, fetch_all
+from nts_scrape import GROUPS, TABS, fetch_all
 
 KST = timezone(timedelta(hours=9))
 OUT = Path(__file__).parent / "docs" / "data.json"
@@ -23,10 +23,11 @@ def main():
 
     payload = {
         "updated": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),
+        "groups": [{"name": g, "tabs": tabs} for g, tabs in GROUPS.items()],
         "tabs": [{"name": tab, "items": data[tab]} for tab in TABS],
     }
     # 글 목록이 그대로면 시간만 바뀐 커밋이 쌓이지 않도록 파일을 건드리지 않음
-    if old.get("tabs") == payload["tabs"]:
+    if old.get("tabs") == payload["tabs"] and old.get("groups") == payload["groups"]:
         print("변경 없음")
         return
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
