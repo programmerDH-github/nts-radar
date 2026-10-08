@@ -1,5 +1,6 @@
 """국세청·재정경제부 목록을 가져와 웹앱용 docs/data.json 으로 저장한다. (GitHub Actions에서 주기적으로 실행)"""
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,7 +17,9 @@ def main():
     # 한 사이트가 잠깐 안 열려도 그 탭은 이전 목록을 유지
     data, errors = fetch_all(fallback=old_tabs)
     for tab, e in errors.items():
-        print(f"[경고] {tab} 가져오기 실패 → 이전 목록 유지: {e}")
+        print(f"[경고] {tab} 가져오기 실패 → 이전 목록 유지: {type(e).__name__}: {e}")
+    if len(errors) == len(data) - 1:  # '전체'를 뺀 모든 탭 실패
+        sys.exit("모든 사이트 접속 실패")
 
     payload = {
         "updated": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),

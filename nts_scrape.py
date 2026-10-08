@@ -3,8 +3,18 @@ from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"}
+
+# 접속이 잠깐 끊기거나 느릴 때 몇 번 다시 시도
+session = requests.Session()
+session.headers.update(HEADERS)
+session.mount("https://", HTTPAdapter(max_retries=Retry(
+    total=3, connect=3, read=3, backoff_factor=2,
+    status_forcelist=[500, 502, 503, 504], allowed_methods=None)))
+TIMEOUT = (20, 30)  # (접속, 응답) 초
 
 # ---------- 국세청 ----------
 BASE = "https://www.nts.go.kr"
@@ -23,7 +33,7 @@ BOARDS = {
 
 
 def fetch_tab(bbs_id):
-    res = requests.post(f"{BASE}/nts/bbsId.do", data={"bbsId": bbs_id}, headers=HEADERS, timeout=10)
+    res = session.post(f"{BASE}/nts/bbsId.do", data={"bbsId": bbs_id}, timeout=TIMEOUT)
     res.raise_for_status()
     items = []
     for x in res.json()["nttList"]:
@@ -46,7 +56,7 @@ MOFE_TAX_DEPT = "1051010"             # 세제실
 
 def fetch_mofe_tax():
     """재정경제부 보도자료 중 세제실(조세정책과, 소득세제과 등) 글만 가져온다."""
-    res = requests.get(f"{MOFE}/nw/nes/nesdta.do", headers=HEADERS, timeout=15, params={
+    res = session.get(f"{MOFE}/nw/nes/nesdta.do", timeout=TIMEOUT, params={
         "searchBbsId1": MOFE_PRESS, "menuNo": "4010100", "searchSilDeptId1": MOFE_TAX_DEPT,
     })
     res.raise_for_status()
@@ -100,7 +110,5 @@ def fetch_all(fallback=None):
         except Exception as e:
             errors[tab] = e
             data[tab] = (fallback or {}).get(tab, [])
-    if len(errors) == len(SOURCES):
-        raise next(iter(errors.values()))
     data["전체"] = merge_all(data)
     return {tab: data[tab] for tab in TABS}, errors

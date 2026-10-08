@@ -143,6 +143,8 @@ class RadarApp:
         try:
             # 일부 사이트가 안 열리면 그 탭은 직전 목록을 유지
             data, errors = fetch_all(fallback=self.data)
+            if len(errors) == len(data) - 1:  # '전체'를 뺀 모든 탭 실패
+                raise next(iter(errors.values()))
             self.failed = list(errors)
             self.root.after(0, self._on_loaded, data, None)
         except Exception as e:
