@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-04 02:09",
+ "updated": "2026-11-04 11:41",
  "groups": [
   {
    "name": "소식",
@@ -26,6 +26,13 @@
   {
    "name": "전체",
    "items": [
+    {
+     "id": "1355841",
+     "구분": "공지",
+     "제목": "｢2026 K-SUUL AWARDS｣ 국민‧외국인 심사단 선정 결과 발표",
+     "날짜": "26.11.04.",
+     "링크": "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2207&bbsId=1011&nttSn=1355841"
+    },
     {
      "id": "1355828",
      "구분": "보도",
@@ -181,13 +188,6 @@
      "링크": "https://mofe.go.kr/nw/nes/detailNesDtaView.do?searchBbsId1=MOSFBBS_000000000028&searchNttId1=MOSF_000000000079475&menuNo=4010100"
     },
     {
-     "id": "1355269",
-     "구분": "공지",
-     "제목": "제61회 납세자의 날 기념 납세자 포상계획 안내",
-     "날짜": "26.09.29.",
-     "링크": "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2207&bbsId=1011&nttSn=1355269"
-    },
-    {
      "id": "MOSF_000000000079468",
      "구분": "세제",
      "제목": "「소득세법 시행령」 등 4개 시행령 국무회의 의결 (재산세제과)",
@@ -331,6 +331,13 @@
    "name": "공지사항",
    "items": [
     {
+     "id": "1355841",
+     "구분": "공지",
+     "제목": "｢2026 K-SUUL AWARDS｣ 국민‧외국인 심사단 선정 결과 발표",
+     "날짜": "26.11.04.",
+     "링크": "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2207&bbsId=1011&nttSn=1355841"
+    },
+    {
      "id": "1355795",
      "구분": "공지",
      "제목": "고액체납 특별성과 거양 대통령 표창 수상",
@@ -378,13 +385,6 @@
      "제목": "k-SUUL AWARDS 국민‧외국인 심사단 모집",
      "날짜": "26.10.15.",
      "링크": "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2207&bbsId=1011&nttSn=1355573"
-    },
-    {
-     "id": "1355269",
-     "구분": "공지",
-     "제목": "제61회 납세자의 날 기념 납세자 포상계획 안내",
-     "날짜": "26.09.29.",
-     "링크": "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2207&bbsId=1011&nttSn=1355269"
     }
    ]
   },
